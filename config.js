@@ -1,125 +1,111 @@
 
 function main(config) {
-  // ===== 需要修改的配置 =====
-  // 填写你的机场订阅 URL；留空则使用现有配置中的节点
-  const SUBSCRIPTION_URL = "";
+  if (!config || typeof config !== "object") {
+    throw new Error("无效的 Mihomo 配置对象");
+  }
 
-  // GEO 数据库及分流规则
+  const groups = config["proxy-groups"] || [];
+  const rules = config["rules"] || [];
+
+  const groupNames = new Set(
+    groups.map(group => group.name)
+  );
+
+  // 需要存在的策略组
+  const requiredGroups = [
+    {
+      name: "Proxy",
+      type: "select",
+      proxies: ["DIRECT"]
+    },
+    {
+      name: "Emby",
+      type: "select",
+      proxies: ["DIRECT", "Proxy"]
+    },
+    {
+      name: "Steam",
+      type: "select",
+      proxies: ["DIRECT", "Proxy"]
+    },
+    {
+      name: "Others",
+      type: "select",
+      proxies: ["Proxy", "DIRECT"]
+    }
+  ];
+
+  for (const group of requiredGroups) {
+    if (!groupNames.has(group.name)) {
+      groups.push(group);
+      groupNames.add(group.name);
+    }
+  }
+
+  config["proxy-groups"] = groups;
+
+  // GEO 数据库设置
   config["geodata-mode"] = true;
   config["geo-auto-update"] = true;
   config["geo-update-interval"] = 24;
 
   config["geox-url"] = {
-    geoip: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat",
-    geosite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
-    mmdb: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country-lite.mmdb"
+    ...(config["geox-url"] || {}),
+    geoip:
+      "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat",
+    geosite:
+      "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat"
   };
 
-  // 确保必要字段存在
-  config["proxy-providers"] = config["proxy-providers"] || {};
-  config["proxy-groups"] = config["proxy-groups"] || [];
-  config["rules"] = config["rules"] || [];
-
-  // 可选：定义机场订阅提供者
-  if (SUBSCRIPTION_URL) {
-    config["proxy-providers"]["cxy"] = {
-      type: "http",
-      url: SUBSCRIPTION_URL,
-      path: "./providers/cxy.yaml",
-      interval: 3600,
-      "health-check": {
-        enable: true,
-        url: "https://www.gstatic.com/generate_204",
-        interval: 300
-      }
-    };
-  }
-
-  // 判断是否已经存在策略组
-  const groups = config["proxy-groups"];
-  const hasGroup = name => groups.some(g => g.name === name);
-
-  // 添加 Proxy 策略组
-  if (!hasGroup("Proxy")) {
-    const proxyGroup = {
-      name: "Proxy",
-      type: "select",
-      proxies: []
-    };
-
-    if (config["proxy-providers"]["cxy"]) {
-      proxyGroup.use = ["cxy"];
-    } else {
-      proxyGroup.proxies = ["DIRECT"];
-    }
-
-    groups.push(proxyGroup);
-  }
-
-  // 添加 Emby 策略组
-  if (!hasGroup("Emby")) {
-    groups.push({
-      name: "Emby",
-      type: "select",
-      proxies: ["DIRECT", "Proxy"]
-    });
-  }
-
-  // 添加 Steam 策略组
-  if (!hasGroup("Steam")) {
-    groups.push({
-      name: "Steam",
-      type: "select",
-      proxies: ["DIRECT", "Proxy"]
-    });
-  }
-
-  // 添加 Others 策略组
-  if (!hasGroup("Others")) {
-    groups.push({
-      name: "Others",
-      type: "select",
-      proxies: ["Proxy", "DIRECT"]
-    });
-  }
-
-  // GEO 与 Emby / Steam 分流
-  const newRules = [
+  // 自定义分流规则
+  const customRules = [
     "GEOIP,private,DIRECT,no-resolve",
 
+    // Emby
     "DOMAIN-SUFFIX,luvme.de5.net,DIRECT",
     "DOMAIN-SUFFIX,biliblili.uk,Emby",
     "DOMAIN-SUFFIX,embyplus.org,Emby",
     "DOMAIN-SUFFIX,chapanda.site,Emby",
 
+    // Steam
     "GEOSITE,steam@cn,DIRECT",
     "GEOSITE,steam,Steam",
 
-    "GEOSITE,apple-cn,DIRECT",
+    // 
+    "GEOSITE,apple,DIRECT",
+    "GEOSITE,microsoft,DIRECT",
 
+    // 常见境外服务 IP 分类（依赖数据库支持）
     "GEOIP,telegram,Proxy,no-resolve",
     "GEOIP,google,Proxy,no-resolve",
 
+    // GEO 主规则
     "GEOSITE,cn,DIRECT",
     "GEOIP,CN,DIRECT,no-resolve",
     "GEOSITE,geolocation-!cn,Proxy"
   ];
 
-  // 避免重复插入相同规则
-  const existingRules = new Set(config.rules);
-  const rulesToAdd = newRules.filter(r => !existingRules.has(r));
+  // 清理重复的自定义规则
+  const customSet = new Set(customRules);
+  const filteredRules = rules.filter(
+    rule => !customSet.has(rule)
+  );
 
-  // 自定义规则应放在 MATCH 兜底规则之前
-  const matchIndex = config.rules.findIndex(
-    r => typeof r === "string" && r.startsWith("MATCH,")
+  // 插入到 MATCH 兜底规则之前
+  const matchIndex = filteredRules.findIndex(
+    rule =>
+      typeof rule === "string" &&
+      rule.startsWith("MATCH,")
   );
 
   if (matchIndex >= 0) {
-    config.rules.splice(matchIndex, 0, ...rulesToAdd);
+    filteredRules.splice(matchIndex, 0, ...customRules);
   } else {
-    config.rules.push(...rulesToAdd);
-    config.rules.push("MATCH,Others");
+    filteredRules.push(...customRules);
+    filteredRules.push("MATCH,Others");
   }
+
+  config["rules"] = filteredRules;
 
   return config;
 }
