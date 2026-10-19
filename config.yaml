@@ -1,44 +1,90 @@
+
+# FlClash / Mihomo 完整配置
+# 保留 Emby、Steam、GEO 分流
+# 必填：将 YOUR_SUBSCRIPTION_URL 替换为真实机场订阅 URL
+
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+tcp-concurrent: true
+
+# GEO 数据库
+geodata-mode: true
+geo-auto-update: true
+geo-update-interval: 24
+geox-url:
+  geoip: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat"
+  geosite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat"
+  mmdb: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country-lite.mmdb"
+
+# 机场节点订阅
+proxy-providers:
+  cxy:
+    type: http
+    url: "YOUR_SUBSCRIPTION_URL"
+    path: ./providers/cxy.yaml
+    interval: 3600
+    health-check:
+      enable: true
+      url: "https://www.gstatic.com/generate_204"
+      interval: 300
+      timeout: 5000
+      lazy: true
+
+# 策略组
 proxy-groups:
-- name: Proxy
-  type: select
-  use:
-  - cxy
-  icon: https://www.clashverge.dev/assets/icons/google.svg
-- name: Emby
-  type: select
-  proxies:
-  - DIRECT
-  - Proxy
-  use:
-  - cxy
-  icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Emby.png
-- name: Steam
-  type: select
-  proxies:
-  - DIRECT
-  - Proxy
-  use:
-  - cxy
-  icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
-- name: Others
-  type: select
-  proxies:
-  - DIRECT
-  - Proxy
-  use:
-  - cxy
-  icon: https://www.clashverge.dev/assets/icons/fish.svg
+  - name: Proxy
+    type: select
+    use:
+      - cxy
+
+  - name: Emby
+    type: select
+    proxies:
+      - DIRECT
+      - Proxy
+
+  - name: Steam
+    type: select
+    proxies:
+      - DIRECT
+      - Proxy
+
+  - name: Others
+    type: select
+    proxies:
+      - Proxy
+      - DIRECT
+
+# 分流规则：从上到下匹配
 rules:
-- DOMAIN-SUFFIX,luvme.de5.net,DIRECT
-- DOMAIN-SUFFIX,biliblili.uk,Emby
-- DOMAIN-SUFFIX,embyplus.org,Emby
-- DOMAIN-SUFFIX,chapanda.site,Emby
-- GEOSITE,steam@cn,DIRECT
-- GEOSITE,apple-cn,DIRECT
-- GEOSITE,steam,Steam
-- GEOSITE,geolocation-!cn,Proxy
-- GEOSITE,cn,DIRECT
-- GEOIP,telegram,Proxy
-- GEOIP,google,Proxy
-- GEOIP,cn,DIRECT
-- MATCH,Others
+  # 局域网直连
+  - GEOIP,private,DIRECT,no-resolve
+
+  # 原配置的自定义 Emby 域名
+  - DOMAIN-SUFFIX,luvme.de5.net,DIRECT
+  - DOMAIN-SUFFIX,biliblili.uk,Emby
+  - DOMAIN-SUFFIX,embyplus.org,Emby
+  - DOMAIN-SUFFIX,chapanda.site,Emby
+
+  # Steam 国内服务直连，Steam 其他服务交给 Steam 策略组
+  - GEOSITE,steam@cn,DIRECT
+  - GEOSITE,steam,Steam
+
+  # Apple 苹果微软服务直连
+  - GEOSITE,apple,DIRECT
+  - GEOSITE,microsoft,DIRECT
+
+  # 指定 IP 类别
+  - GEOIP,telegram,Proxy,no-resolve
+  - GEOIP,google,Proxy,no-resolve
+
+  # GEO 域名分流
+  - GEOSITE,cn,DIRECT
+  - GEOIP,CN,DIRECT,no-resolve
+  - GEOSITE,geolocation-!cn,Proxy
+
+  # 兜底
+  - MATCH,Others
