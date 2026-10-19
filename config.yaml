@@ -1,0 +1,114 @@
+mode: rule
+mixed-port: 7897
+allow-lan: false
+log-level: info
+ipv6: false
+external-controller: ''
+secret: set-your-secret
+unified-delay: true
+external-controller-pipe: \\.\pipe\verge-mihomo-sidecar-release-f751b2730bf808caf6d7b832db7e408b0158a76082bcd2a3d16bc9d575f56ad6
+external-controller-cors:
+  allow-private-network: true
+  allow-origins:
+  - '*'
+bind-address: '*'
+tun:
+  auto-detect-interface: true
+  auto-route: true
+  device: Mihomo
+  dns-hijack:
+  - any:53
+  mtu: 1500
+  stack: system
+  strict-route: false
+  enable: false
+tcp-concurrent: true
+dns:
+  enable: true
+  ipv6: true
+  default-nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  - 114.114.114.114
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  use-hosts: true
+  respect-rules: true
+  proxy-server-nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  - 114.114.114.114
+  nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  - 114.114.114.114
+  fallback:
+  - 1.1.1.1
+  - 8.8.8.8
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+    geosite:
+    - gfw
+    ipcidr:
+    - 240.0.0.0/4
+    domain:
+    - +.google.com
+    - +.facebook.com
+    - +.youtube.com
+
+proxy-providers:
+  cxy:
+    type: http
+    url: https://xn--9kqs1lo79d.cc/api/v1/chuixue?token=6445b1a185ed6dc2cae9a14fca18393b
+    path: ./proxy_providers/cxy.yaml
+    interval: 10800
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 500
+
+proxy-groups:
+- name: Proxy
+  type: select
+  use:
+  - cxy
+  icon: https://www.clashverge.dev/assets/icons/google.svg
+- name: Emby
+  type: select
+  proxies:
+  - DIRECT
+  - Proxy
+  use:
+  - cxy
+  icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Emby.png
+- name: Steam
+  type: select
+  proxies:
+  - DIRECT
+  - Proxy
+  use:
+  - cxy
+  icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
+- name: Others
+  type: select
+  proxies:
+  - DIRECT
+  - Proxy
+  use:
+  - cxy
+  icon: https://www.clashverge.dev/assets/icons/fish.svg
+rules:
+- DOMAIN-SUFFIX,luvme.de5.net,DIRECT
+- DOMAIN-SUFFIX,biliblili.uk,Emby
+- DOMAIN-SUFFIX,embyplus.org,Emby
+- DOMAIN-SUFFIX,chapanda.site,Emby
+- GEOSITE,steam@cn,DIRECT
+- GEOSITE,apple-cn,DIRECT
+- GEOSITE,steam,Steam
+- GEOSITE,geolocation-!cn,Proxy
+- GEOSITE,cn,DIRECT
+- GEOIP,telegram,Proxy
+- GEOIP,google,Proxy
+- GEOIP,cn,DIRECT
+- MATCH,Others
